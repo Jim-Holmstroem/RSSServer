@@ -1,17 +1,13 @@
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
 
 import time
-try:
-    import http.server as httpserver
-except ImportError:
-    import BaseHTTPServer as httpserver
+import http.server as httpserver
 
 from functools import partial, reduce
 import operator as op
 
-#import pymongo
+import pymongo
 
 HOSTNAME = 'localhost'
 PORT = 80
@@ -59,7 +55,7 @@ class Handler(httpserver.BaseHTTPRequestHandler):
             s.wfile.write(
                 bytes(
                     m, 
-                    encoding?
+                    encoding=encoding
                 )
             )
         
