@@ -9,7 +9,7 @@ import operator as op
 
 import pymongo
 
-HOSTNAME = 'localhost'
+HOSTNAME = '192.168.1.85'
 PORT = 80
 
 def unpack(f, a):
@@ -17,7 +17,7 @@ def unpack(f, a):
 def unpackd(f,a):
     return f(**a)
 
-def printer(a):
+def tee(a):
     print(a)
     return a
 
@@ -39,6 +39,25 @@ def tag(name, *content, **attributes):
         )
     )
 
+class Path(object):
+    def __init__(self, m):
+        self.directory, *variablestring = m.split('?')
+        self.folders = list(filter(bool, self.directory.split('/')))
+        if(variablestring):
+            def parse_variable(v):
+                return tuple(v.split("="))
+            self.variables = dict(
+                map(
+                    parse_variable,
+                    variablestring[0].split("&")
+                )
+            )
+        else:
+            self.variables = []
+
+    def __repr__(self):
+        return "Path(folders={folders}, variables={variables})".format(folders=self.folders, variables=self.variables)
+ 
 class Handler(httpserver.BaseHTTPRequestHandler):
     def do_HEAD(s):
         s.send_response(200)
@@ -47,9 +66,6 @@ class Handler(httpserver.BaseHTTPRequestHandler):
 
     def do_GET(s):
         """Responde to a GET request"""
-        s.send_response(200)
-        s.send_header("Content-type", "text/xml")
-        s.end_headers()
 
         def write(m, encoding="utf-8"):
             s.wfile.write(
@@ -64,21 +80,43 @@ class Handler(httpserver.BaseHTTPRequestHandler):
                 return "<![CDATA[{data}]]>".format(data=data)
             return tag("item",
                 *map(
-                    lambda name: 
-                    tag(name, padding(CDATA(item[name]))),
-                    item
+                    lambda name: tag(
+                        name, 
+                        padding(
+                            CDATA(
+                                item[name]
+                            )
+                        )
+                    ),
+                    filter(
+                        lambda t: not t.startswith('_'),
+                        item
+                    )
                 )
             )
 
-        rss_id = "SE1055"
-        domain = "http://jimboslice.no-ip.com"
+        path = Path(s.path)
+        print(path)
+        if(len(path.folders)>0 and path.folders[0]=='favicon.ico' or not len(path.folders)):
+            s.send_response(404)
+            s.end_headers()
+            return
+
+        rss_id = path.folders[0]
+        
+        s.send_response(200)
+        s.send_header("Content-type", "text/xml")
+        s.end_headers()
+        
+        database = pymongo.MongoClient('localhost', 1337)['rss-database']
+        collection = database[rss_id]
 
         write('<?xml version="1.0" encoding="UTF-8"?>\n')
         write(
             tag("rss",
                 tag("channel",
                     tag("title", "{rss_id} RSS".format(rss_id=rss_id)),
-                    tag("link", "{domain}/{rss_id}".format(domain=domain, rss_id=rss_id)),
+                    tag("link", "{domain}/{rss_id}".format(domain=HOSTNAME, rss_id=rss_id)),
                     tag("description", "RSS feed for {rss_id}".format(rss_id=rss_id)),
                     tag("language", "en-us"),
                     tag("copyright", "Copyright 2013, Jim Holmström"),
@@ -86,17 +124,18 @@ class Handler(httpserver.BaseHTTPRequestHandler):
                     tag("webMaster", "me@jim.pm (Jim Holmström)"),
                     *map(                
                         render_item,
-                        [
-                            dict(title='1.11',link='http://link.com',description='desc',comments='comment'),
-                            dict(title='1.11',link='http://link.com',description='desc',comments='comment'),
-                        ]
+                        collection.find().sort('_id') #title/link/description/..
                     )
                 ),
             version="2.0"
             )
         )
-        
-
+#db=pymongo.MongoClient('localhost', 1337)['rss-database']
+#c=db['SE1055'] 
+#a=['1.1','1.2',..]
+#d=list(map(lambda t: {'title':t},a))
+#c.insert(d)
+ 
 if __name__ == "__main__":
     httpd = httpserver.HTTPServer((HOSTNAME, PORT), Handler)
     print(time.asctime(), "Server start - {name}:{port}".format(name=HOSTNAME, port=PORT))
@@ -106,3 +145,4 @@ if __name__ == "__main__":
         pass
     httpd.server_close()
     print(time.asctime(), "Server stops - {name}:{port}".format(name=HOSTNAME, port=PORT))
+
