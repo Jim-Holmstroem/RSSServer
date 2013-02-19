@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 
-
 import time
 import http.server as httpserver
 
+import itertools as it
 from functools import partial, reduce
 import operator as op
 
-import pymongo
+import pymongo #install latest ``distribute'' to install pip-3.2 to install pymongo for
 
-HOSTNAME = '192.168.1.85'
+HOSTNAME = 'localhost'
 PORT = 80
 
 def unpack(f, a):
@@ -88,8 +88,8 @@ class Handler(httpserver.BaseHTTPRequestHandler):
                             )
                         )
                     ),
-                    filter(
-                        lambda t: not t.startswith('_'),
+                    it.filterfalse(
+                        op.methodcaller('startswith', '_'),
                         item
                     )
                 )
